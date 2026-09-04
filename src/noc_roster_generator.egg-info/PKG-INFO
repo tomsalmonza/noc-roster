@@ -1,3 +1,13 @@
+Metadata-Version: 2.4
+Name: noc-roster-generator
+Version: 0.1.0
+Summary: Spec-driven NOC roster generator using OR-Tools
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: ortools>=9.10.4067
+Requires-Dist: pandas>=2.2.2
+Requires-Dist: openpyxl>=3.1.5
+
 # NOC Roster Generator
 
 Python roster generator that implements the rules in the master specification document:
@@ -28,7 +38,7 @@ It uses Google OR-Tools CP-SAT to generate a full-year base roster from 2026-08-
 2. Run generation.
 
 ```bash
-pip install -e .
+pip install -r requirements.txt
 python -m noc_roster.cli generate --output outputs/NOC_Roster_2026_2027.xlsx --time-limit 120
 ```
 
