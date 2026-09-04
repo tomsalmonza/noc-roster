@@ -1,3 +1,13 @@
+Metadata-Version: 2.4
+Name: noc-roster-generator
+Version: 0.1.0
+Summary: Spec-driven NOC roster generator using OR-Tools
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: ortools>=9.10.4067
+Requires-Dist: pandas>=2.2.2
+Requires-Dist: openpyxl>=3.1.5
+
 # NOC Roster Generator
 
 Python roster generator that implements the rules in the master specification document:
@@ -17,7 +27,6 @@ It uses Google OR-Tools CP-SAT to generate a full-year base roster from 2026-08-
   - Exactly 219 operational shifts per employee
   - Designated weekend owner rotation and full weekend off assignment
   - Ten-week weekend ownership limit
-  - Actual full weekends off balanced within a two-weekend range
 - Soft-constraint optimization objective stack aligned to the defined optimization hierarchy
 - Full validation pass (hard + soft)
 - Workbook generation with required sheets

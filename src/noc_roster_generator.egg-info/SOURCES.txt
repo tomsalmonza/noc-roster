@@ -1,0 +1,16 @@
+README.md
+pyproject.toml
+src/noc_roster/__init__.py
+src/noc_roster/cli.py
+src/noc_roster/cover.py
+src/noc_roster/solver.py
+src/noc_roster/spec.py
+src/noc_roster/validator.py
+src/noc_roster/workbook.py
+src/noc_roster_generator.egg-info/PKG-INFO
+src/noc_roster_generator.egg-info/SOURCES.txt
+src/noc_roster_generator.egg-info/dependency_links.txt
+src/noc_roster_generator.egg-info/entry_points.txt
+src/noc_roster_generator.egg-info/requires.txt
+src/noc_roster_generator.egg-info/top_level.txt
+tests/test_spec_basics.py

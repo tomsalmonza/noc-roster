@@ -17,6 +17,7 @@ from .spec import (
     GROUP_B,
     OPERATIONAL,
     OPERATIONAL_SHIFT_TARGET,
+    MAX_ACTUAL_FULL_WEEKEND_OFF_RANGE,
     PREMIUM_HOLIDAYS,
     PUBLIC_HOLIDAYS,
     all_dates,
@@ -240,6 +241,27 @@ def solve_roster(settings: SolverSettings | None = None) -> SolveResult:
     for wk in weekends:
         model.Add(x[(wk.owner, wk.saturday_idx, "OFF")] == 1)
         model.Add(x[(wk.owner, wk.sunday_idx, "OFF")] == 1)
+
+    actual_full_weekend_counts: Dict[str, cp_model.IntVar] = {}
+    for e in EMPLOYEES:
+        full_weekends = [
+            _and2(model, x[(e, wk.saturday_idx, "OFF")], x[(e, wk.sunday_idx, "OFF")], f"full_weekend_{e}_{wk.weekend_number}")
+            for wk in weekends
+        ]
+        count = model.NewIntVar(0, len(weekends), f"actual_full_weekends_{e}")
+        model.Add(count == sum(full_weekends))
+        actual_full_weekend_counts[e] = count
+
+    for employee_index, employee in enumerate(EMPLOYEES):
+        for other_employee in EMPLOYEES[employee_index + 1 :]:
+            model.Add(
+                actual_full_weekend_counts[employee] - actual_full_weekend_counts[other_employee]
+                <= MAX_ACTUAL_FULL_WEEKEND_OFF_RANGE
+            )
+            model.Add(
+                actual_full_weekend_counts[other_employee] - actual_full_weekend_counts[employee]
+                <= MAX_ACTUAL_FULL_WEEKEND_OFF_RANGE
+            )
 
     # Ten-week designated weekend ownership cap is guaranteed by fixed rotation.
     for cycle in ten_week_cycles(weekends):
