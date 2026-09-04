@@ -395,6 +395,9 @@ def solve_roster(settings: SolverSettings | None = None) -> SolveResult:
     weekend_counts: Dict[str, cp_model.IntVar] = {}
     weekend_dev_terms = []
     weekend_excess_terms = []
+    actual_full_weekend_counts: Dict[str, cp_model.IntVar] = {}
+    actual_full_weekend_dev_terms = []
+    actual_full_weekend_total = 0
     for e in EMPLOYEES:
         c = model.NewIntVar(0, 366, f"weekend_ops_{e}")
         model.Add(c == sum(x[(e, d, s)] for d in weekend_day_indices for s in OPERATIONAL))
@@ -410,8 +413,30 @@ def solve_roster(settings: SolverSettings | None = None) -> SolveResult:
         model.Add(excess >= 0)
         weekend_excess_terms.append(excess)
 
+        full_weekend_count = model.NewIntVar(0, len(weekends), f"actual_full_weekends_{e}")
+        full_weekend_vars = []
+        for wk in weekends:
+            full_weekend = _and2(
+                model,
+                x[(e, wk.saturday_idx, "OFF")],
+                x[(e, wk.sunday_idx, "OFF")],
+                f"actual_full_weekend_{e}_{wk.weekend_number}",
+            )
+            full_weekend_vars.append(full_weekend)
+        model.Add(full_weekend_count == sum(full_weekend_vars))
+        actual_full_weekend_counts[e] = full_weekend_count
+        actual_full_weekend_total += full_weekend_count
+
+    for e in EMPLOYEES:
+        dev = model.NewIntVar(0, len(weekends) * 10, f"actual_full_weekend_dev_{e}")
+        model.Add(dev >= actual_full_weekend_counts[e] * 10 - actual_full_weekend_total)
+        model.Add(dev >= actual_full_weekend_total - actual_full_weekend_counts[e] * 10)
+        actual_full_weekend_dev_terms.append(dev)
+
     penalty_terms.append(("weekend_variance", sum(weekend_dev_terms), 3000))
     penalty_terms.append(("weekend_above_avg_plus_one", sum(weekend_excess_terms), 600))
+    penalty_terms.append(("actual_full_weekend_variance", sum(actual_full_weekend_dev_terms), 3000))
+    penalty_terms.append(("actual_full_weekend_total", -actual_full_weekend_total, 100))
 
     # Priority 6: shift-type fairness (preferred 71-75 each).
     shift_balance_terms = []

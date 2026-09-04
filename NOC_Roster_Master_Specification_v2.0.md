@@ -677,6 +677,21 @@ from the team average.
 
 This is a soft optimisation objective.
 
+## 12.8 Actual Full Weekend Off Fairness
+
+Actual Full Weekends Off shall be distributed as evenly as possible across all
+employees. The optimiser shall minimise variance in each employee's count of
+Saturday and Sunday both assigned as Off, while preserving as many Full
+Weekends Off as practical.
+
+Target:
+
+```
+Minimum practical variance; equal counts where feasible.
+```
+
+This is a soft optimisation objective.
+
 ---
 
 # 13. Public Holidays
