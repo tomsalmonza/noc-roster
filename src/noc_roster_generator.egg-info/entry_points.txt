@@ -1,2 +1,0 @@
-[console_scripts]
-noc-roster = noc_roster.cli:main

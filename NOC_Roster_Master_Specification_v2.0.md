@@ -679,16 +679,6 @@ This is a soft optimisation objective.
 
 ---
 
-## 12.8 Actual Full Weekend Off Balance
-
-The number of actual Full Weekends Off, including both designated and coincidental full weekends, shall be balanced across employees.
-
-The difference between the employee with the most actual Full Weekends Off and the employee with the fewest shall not exceed 2.
-
-This is a hard constraint.
-
----
-
 # 13. Public Holidays
 
 The roster shall include the following South African public holidays falling within the roster period.

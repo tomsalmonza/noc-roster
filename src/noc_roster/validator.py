@@ -11,7 +11,6 @@ from .spec import (
     GROUP_A,
     GROUP_B,
     LEAVE_EQUIVALENTS,
-    MAX_ACTUAL_FULL_WEEKEND_OFF_RANGE,
     OPERATIONAL,
     OPERATIONAL_SHIFT_TARGET,
     PAID_SHIFT_TARGET,
@@ -309,27 +308,6 @@ def validate_roster(assignments: Dict[Tuple[date, str], str]) -> ValidationRepor
         for e in EMPLOYEES:
             if by_day[sat][e] == "OFF" and by_day[sun][e] == "OFF":
                 employee_summary[e]["Actual Full Weekends Off"] += 1
-
-    actual_full_weekend_counts = {
-        e: int(employee_summary[e]["Actual Full Weekends Off"]) for e in EMPLOYEES
-    }
-    minimum_full_weekends = min(actual_full_weekend_counts.values())
-    maximum_full_weekends = max(actual_full_weekend_counts.values())
-    if maximum_full_weekends - minimum_full_weekends > MAX_ACTUAL_FULL_WEEKEND_OFF_RANGE:
-        hard_violations.append(
-            Violation(
-                rule="Actual Full Weekend Off Balance",
-                day=None,
-                employee=None,
-                description=(
-                    f"Actual full weekends off range from {minimum_full_weekends} to {maximum_full_weekends}; "
-                    f"the maximum allowed range is {MAX_ACTUAL_FULL_WEEKEND_OFF_RANGE}."
-                ),
-                severity="Hard",
-                penalty=0,
-                resolution="Balance full SAT+SUN OFF weekends across employees.",
-            )
-        )
 
     # Pairing matrix and diversity score.
     for d in dates:

@@ -17,7 +17,6 @@ It uses Google OR-Tools CP-SAT to generate a full-year base roster from 2026-08-
   - Exactly 219 operational shifts per employee
   - Designated weekend owner rotation and full weekend off assignment
   - Ten-week weekend ownership limit
-  - Actual full weekends off balanced within a two-weekend range
 - Soft-constraint optimization objective stack aligned to the defined optimization hierarchy
 - Full validation pass (hard + soft)
 - Workbook generation with required sheets
