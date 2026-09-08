@@ -12,12 +12,12 @@ from .spec import (
     GROUP_B,
     LEAVE_EQUIVALENTS,
     OPERATIONAL,
-    OPERATIONAL_SHIFT_TARGET,
     PAID_SHIFT_TARGET,
     PREMIUM_HOLIDAYS,
     PUBLIC_HOLIDAYS,
     all_dates,
     holiday_score_for_day,
+    is_temporary_shift_removal_day,
     pairing_keys,
     shift_weight_for_day,
     ten_week_cycles,
@@ -164,6 +164,10 @@ def validate_roster(assignments: Dict[Tuple[date, str], str]) -> ValidationRepor
         for e in EMPLOYEES:
             counts[by_day[d][e]] += 1
 
+        # Temporary December Shift removal
+        if is_temporary_shift_removal_day(d):
+            continue
+
         expected = {"M": 2, "A": 2, "N": 2, "SB": 2, "OFF": 2}
         for s, v in expected.items():
             if counts[s] != v:
@@ -245,17 +249,25 @@ def validate_roster(assignments: Dict[Tuple[date, str], str]) -> ValidationRepor
                     )
                 )
 
-    # Hard: exactly 219 operational shifts per employee.
+    # Temporary December Shift removal
+    active_operational_days = sum(not is_temporary_shift_removal_day(day) for day in dates)
+    # Temporary December Shift removal
+    total_operational_shifts = active_operational_days * len(OPERATIONAL) * 2
+    operational_shift_minimum = total_operational_shifts // len(EMPLOYEES)
+    operational_shift_maximum = (total_operational_shifts + len(EMPLOYEES) - 1) // len(EMPLOYEES)
+
+    # Hard: operational shifts remain within the closest achievable range.
     for e in EMPLOYEES:
-        if employee_summary[e]["Operational Shifts"] != OPERATIONAL_SHIFT_TARGET:
+        operational_shifts = employee_summary[e]["Operational Shifts"]
+        if not operational_shift_minimum <= operational_shifts <= operational_shift_maximum:
             hard_violations.append(
                 Violation(
                     rule="Operational Shift Count",
                     day=None,
                     employee=e,
                     description=(
-                        f"Employee has {employee_summary[e]['Operational Shifts']} operational shifts, "
-                        f"expected {OPERATIONAL_SHIFT_TARGET}."
+                        f"Employee has {operational_shifts} operational shifts, "
+                        f"expected between {operational_shift_minimum} and {operational_shift_maximum}."
                     ),
                     severity="Hard",
                     penalty=0,

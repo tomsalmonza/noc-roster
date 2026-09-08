@@ -71,7 +71,8 @@ def write_workbook(
                 {"Item": "Solver status", "Value": solve_result.status},
                 {"Item": "Solve time (seconds)", "Value": round(solve_result.solve_seconds, 2)},
                 {"Item": "Objective value", "Value": solve_result.objective_value},
-                {"Item": "Planning assumptions", "Value": "Paid 260, Leave 41, Operational 219"},
+                # Temporary December Shift removal
+                {"Item": "Planning assumptions", "Value": "Paid 260, Leave 41, Operational 209-210 during temporary closure"},
                 {"Item": "Hard constraint summary", "Value": "Daily assignment/staffing, pairing, nights, N->M, op counts, weekend ownership"},
                 {"Item": "Soft constraint summary", "Value": "Fatigue, fairness, holiday, pairing, shift weight, RQS"},
                 {"Item": "Optimisation priorities", "Value": "As per hierarchy section 26"},
@@ -247,7 +248,8 @@ def write_workbook(
 
         pd.DataFrame(
             [
-                {"Employee": e, "Paid Shift Target": PAID_SHIFT_TARGET, "Leave Equivalents": LEAVE_EQUIVALENTS, "Operational Target": OPERATIONAL_SHIFT_TARGET}
+                # Temporary December Shift removal
+                {"Employee": e, "Paid Shift Target": PAID_SHIFT_TARGET, "Leave Equivalents": LEAVE_EQUIVALENTS, "Operational Target": "209-210 (temporary closure)"}
                 for e in EMPLOYEES
             ]
         ).to_excel(writer, index=False, sheet_name="Leave Statistics")

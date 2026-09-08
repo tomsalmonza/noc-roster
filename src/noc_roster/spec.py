@@ -75,6 +75,10 @@ PAID_SHIFT_TARGET = 260
 LEAVE_EQUIVALENTS = 41
 OPERATIONAL_SHIFT_TARGET = 219
 
+# Temporary December Shift removal
+TEMPORARY_SHIFT_REMOVAL_START = date(2026, 12, 20)
+TEMPORARY_SHIFT_REMOVAL_END = date(2027, 1, 4)
+
 
 @dataclass(frozen=True)
 class WeekendDefinition:
@@ -91,6 +95,11 @@ def all_dates() -> List[date]:
         out.append(current)
         current += timedelta(days=1)
     return out
+
+
+# Temporary December Shift removal
+def is_temporary_shift_removal_day(day: date) -> bool:
+    return TEMPORARY_SHIFT_REMOVAL_START <= day <= TEMPORARY_SHIFT_REMOVAL_END
 
 
 def date_index_map(dates: List[date]) -> Dict[date, int]:

@@ -16,8 +16,8 @@ from .spec import (
     GROUP_A,
     GROUP_B,
     OPERATIONAL,
-    OPERATIONAL_SHIFT_TARGET,
     PREMIUM_HOLIDAYS,
+    is_temporary_shift_removal_day,
     PUBLIC_HOLIDAYS,
     all_dates,
     holiday_score_for_day,
@@ -212,6 +212,12 @@ def solve_roster(settings: SolverSettings | None = None) -> SolveResult:
             model.Add(sum(x[(e, d, s)] for s in ASSIGNMENTS) == 1)
 
     for d in range(num_days):
+        # Temporary December Shift removal
+        if is_temporary_shift_removal_day(dates[d]):
+            for e in EMPLOYEES:
+                model.Add(x[(e, d, "OFF")] == 1)
+            continue
+
         model.Add(sum(x[(e, d, "M")] for e in EMPLOYEES) == 2)
         model.Add(sum(x[(e, d, "A")] for e in EMPLOYEES) == 2)
         model.Add(sum(x[(e, d, "N")] for e in EMPLOYEES) == 2)
@@ -233,8 +239,20 @@ def solve_roster(settings: SolverSettings | None = None) -> SolveResult:
         for d in range(num_days - 1):
             model.Add(x[(e, d, "N")] + x[(e, d + 1, "M")] <= 1)
 
-    for e in EMPLOYEES:
-        model.Add(sum(x[(e, d, s)] for d in range(num_days) for s in OPERATIONAL) == OPERATIONAL_SHIFT_TARGET)
+    # Temporary December Shift removal
+    active_operational_days = sum(not is_temporary_shift_removal_day(day) for day in dates)
+    # Temporary December Shift removal
+    total_operational_shifts = active_operational_days * len(OPERATIONAL) * 2
+    operational_shift_minimum = total_operational_shifts // len(EMPLOYEES)
+    operational_shift_maximum = ceil(total_operational_shifts / len(EMPLOYEES))
+    operational_shift_remainder = total_operational_shifts % len(EMPLOYEES)
+    group_remainder = operational_shift_remainder // 2
+    for employee_index, e in enumerate(EMPLOYEES):
+        operational_count = sum(x[(e, d, s)] for d in range(num_days) for s in OPERATIONAL)
+        # Temporary December Shift removal
+        position_in_group = employee_index % len(GROUP_A)
+        target = operational_shift_maximum if position_in_group < group_remainder else operational_shift_minimum
+        model.Add(operational_count == target)
 
     weekends = weekend_definitions(dates)
     for wk in weekends:
@@ -438,23 +456,31 @@ def solve_roster(settings: SolverSettings | None = None) -> SolveResult:
     penalty_terms.append(("actual_full_weekend_variance", sum(actual_full_weekend_dev_terms), 3000))
     penalty_terms.append(("actual_full_weekend_total", -actual_full_weekend_total, 100))
 
-    # Priority 6: shift-type fairness (preferred 71-75 each).
+    # Priority 6: shift-type fairness.
+    # Temporary December Shift removal
+    shift_type_total = active_operational_days * 2
+    shift_type_minimum = shift_type_total // len(EMPLOYEES)
+    shift_type_maximum = ceil(shift_type_total / len(EMPLOYEES))
     shift_balance_terms = []
     for e in EMPLOYEES:
         for s in ("M", "A", "N"):
             c = model.NewIntVar(0, num_days, f"count_{s}_{e}")
             model.Add(c == sum(x[(e, d, s)] for d in range(num_days)))
 
+            # Temporary December Shift removal
+            model.Add(c >= shift_type_minimum)
+            model.Add(c <= shift_type_maximum)
+
             below = model.NewIntVar(0, 100, f"below_{s}_{e}")
             above = model.NewIntVar(0, 100, f"above_{s}_{e}")
-            model.Add(below >= 71 - c)
+            model.Add(below >= shift_type_minimum - c)
             model.Add(below >= 0)
-            model.Add(above >= c - 75)
+            model.Add(above >= c - shift_type_maximum)
             model.Add(above >= 0)
             shift_balance_terms.append(below)
             shift_balance_terms.append(above)
 
-    penalty_terms.append(("shift_type_range_71_75", sum(shift_balance_terms), 3000))
+    penalty_terms.append(("shift_type_range_active_calendar", sum(shift_balance_terms), 3000))
 
     # Priority 7: shift weight fairness.
     shift_weight_vars: Dict[str, cp_model.IntVar] = {}
@@ -518,8 +544,9 @@ def solve_roster(settings: SolverSettings | None = None) -> SolveResult:
         model.Add(off_count == sum(x[(e, d, "OFF")] for d in range(num_days)))
         model.Add(night_count == sum(x[(e, d, "N")] for d in range(num_days)))
 
-        avg_sb = (2 * num_days) // 10
-        avg_off = (2 * num_days) // 10
+        # Temporary December Shift removal
+        avg_sb = (active_operational_days * 2) // len(EMPLOYEES)
+        avg_off = (active_operational_days * 2 + (num_days - active_operational_days) * len(EMPLOYEES)) // len(EMPLOYEES)
 
         sb_dev = model.NewIntVar(0, 1000, f"sb_dev_{e}")
         off_dev = model.NewIntVar(0, 1000, f"off_dev_{e}")
@@ -536,7 +563,7 @@ def solve_roster(settings: SolverSettings | None = None) -> SolveResult:
         standby_excess_terms.append(sb_excess)
 
         night_excess = model.NewIntVar(0, 1000, f"night_excess_{e}")
-        model.Add(night_excess >= night_count - int(73 * 1.05))
+        model.Add(night_excess >= night_count - int(shift_type_maximum * 1.05))
         model.Add(night_excess >= 0)
         night_excess_terms.append(night_excess)
 
@@ -582,7 +609,10 @@ def solve_roster(settings: SolverSettings | None = None) -> SolveResult:
     objective = []
     for _, expr, weight in penalty_terms:
         objective.append(expr * weight)
-    model.Minimize(sum(objective))
+    if settings.stop_on_first_feasible:
+        model.ClearObjective()
+    else:
+        model.Minimize(sum(objective))
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = settings.time_limit_seconds

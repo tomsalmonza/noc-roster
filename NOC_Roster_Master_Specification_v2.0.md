@@ -1126,10 +1126,13 @@ Hard constraint.
 
 ## 19.2 Morning Shift Target
 
-Preferred range:
+Preferred range during the normal calendar:
 
 ```
 71–75
+
+During the temporary December shutdown, the preferred range is recalculated
+from the active calendar and is approximately 69–70 per shift type.
 ```
 
 Soft optimisation objective.
