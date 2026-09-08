@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
-from datetime import datetime
+from datetime import date, datetime
 import os
 from pathlib import Path
 from typing import Dict, Tuple
@@ -17,12 +17,20 @@ def _group_of(employee: str) -> str:
     return "A" if employee in GROUP_A else "B"
 
 
-def _write_assignment_csv(assignments: Dict[Tuple[datetime.date, str], str], path: Path) -> None:
+def _first_day_next_month(today: date) -> date:
+    if today.month == 12:
+        return date(today.year + 1, 1, 1)
+    return date(today.year, today.month + 1, 1)
+
+
+def _write_assignment_csv(
+    assignments: Dict[Tuple[date, str], str], path: Path, dates: list[date]
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
         writer.writerow(["date", "employee", "group", "assignment"])
-        for d in all_dates():
+        for d in dates:
             for e in EMPLOYEES:
                 writer.writerow([d.isoformat(), e, _group_of(e), assignments[(d, e)]])
 
@@ -38,6 +46,8 @@ def _read_assignment_csv(path: Path) -> Dict[Tuple[datetime.date, str], str]:
 
 
 def cmd_generate(args: argparse.Namespace) -> int:
+    start_date = args.start_date or _first_day_next_month(date.today())
+    dates = all_dates(start_date)
     cpu_count = os.cpu_count() or 1
     auto_workers = max(1, cpu_count - 2)
     workers = args.workers if args.workers is not None else auto_workers
@@ -51,7 +61,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
         cp_sat_search_logs=args.cp_sat_logs,
         stop_on_first_feasible=args.stop_on_first_feasible,
     )
-    result = solve_roster(settings)
+    result = solve_roster(settings, start_date)
     if not result.solved:
         print(f"Solver failed: {result.status}")
         print(f"Solve time (s): {result.solve_seconds:.2f}")
@@ -61,14 +71,14 @@ def cmd_generate(args: argparse.Namespace) -> int:
         print(f"Early stop requested: {result.early_stop_requested}")
         return 1
 
-    validation = validate_roster(result.assignments)
+    validation = validate_roster(result.assignments, dates)
 
-    output_path = Path(args.output)
+    output_path = Path(args.output or f"outputs/NOC_Roster_{dates[0].year}_{dates[-1].year}.xlsx")
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    write_workbook(result.assignments, validation, result, str(output_path))
+    write_workbook(result.assignments, validation, result, str(output_path), dates)
 
     csv_path = Path(args.csv_output)
-    _write_assignment_csv(result.assignments, csv_path)
+    _write_assignment_csv(result.assignments, csv_path, dates)
 
     print(f"Solver status: {result.status}")
     print(f"Objective value: {result.objective_value}")
@@ -94,7 +104,8 @@ def cmd_validate(args: argparse.Namespace) -> int:
         return 1
 
     assignments = _read_assignment_csv(csv_path)
-    validation = validate_roster(assignments)
+    start_date = args.start_date or min(d for d, _ in assignments)
+    validation = validate_roster(assignments, all_dates(start_date))
 
     print(f"Hard constraints passed: {validation.hard_passed}")
     print(f"Hard violations: {len(validation.hard_violations)}")
@@ -116,7 +127,13 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     gen = sub.add_parser("generate", help="Generate annual roster and workbook")
-    gen.add_argument("--output", default="outputs/NOC_Roster_2026_2027.xlsx", help="Workbook output path")
+    gen.add_argument(
+        "--start-date",
+        type=date.fromisoformat,
+        default=None,
+        help="Roster start date in YYYY-MM-DD format (default: first day of next month)",
+    )
+    gen.add_argument("--output", default=None, help="Workbook output path")
     gen.add_argument("--csv-output", default="outputs/roster_assignments.csv", help="Assignment CSV output path")
     gen.add_argument("--time-limit", type=int, default=120, help="CP-SAT solve time limit in seconds")
     gen.add_argument(
@@ -139,12 +156,20 @@ def build_parser() -> argparse.ArgumentParser:
     gen.add_argument(
         "--stop-on-first-feasible",
         action="store_true",
-        help="Stop search as soon as the first feasible solution is found",
+        help="Stop search as soon as the first feasible solution is found (default)",
     )
+    gen.add_argument(
+        "--optimize",
+        dest="stop_on_first_feasible",
+        action="store_false",
+        help="Search for an improved roster objective instead of stopping at the first feasible solution",
+    )
+    gen.set_defaults(stop_on_first_feasible=True)
     gen.set_defaults(func=cmd_generate)
 
     val = sub.add_parser("validate", help="Validate roster assignment CSV")
     val.add_argument("--csv", required=True, help="Path to assignment CSV")
+    val.add_argument("--start-date", type=date.fromisoformat, default=None, help="Roster start date in YYYY-MM-DD format")
     val.set_defaults(func=cmd_validate)
 
     return parser

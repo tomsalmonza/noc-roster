@@ -4,7 +4,7 @@ Python roster generator that implements the rules in the master specification do
 
 - `NOC_Roster_Master_Specification_v2.0.md`
 
-It uses Google OR-Tools CP-SAT to generate a full-year base roster from 2026-08-01 to 2027-07-31.
+It uses Google OR-Tools CP-SAT to generate a full-year base roster. If no start date is supplied, the roster starts on the first day of the next month.
 
 ## Features
 
@@ -29,7 +29,7 @@ It uses Google OR-Tools CP-SAT to generate a full-year base roster from 2026-08-
 
 ```bash
 pip install -e .
-python -m noc_roster.cli generate --output outputs/NOC_Roster_2026_2027.xlsx --time-limit 120
+python -m noc_roster.cli generate --time-limit 120
 ```
 
 ## CLI
@@ -37,7 +37,13 @@ python -m noc_roster.cli generate --output outputs/NOC_Roster_2026_2027.xlsx --t
 Generate roster:
 
 ```bash
-python -m noc_roster.cli generate --output outputs/NOC_Roster_2026_2027.xlsx --time-limit 120
+python -m noc_roster.cli generate --start-date 2026-10-01 --time-limit 120
+
+Generation stops at the first feasible roster by default. Use `--optimize` to search for an improved objective instead:
+
+```bash
+python -m noc_roster.cli generate --start-date 2026-10-01 --optimize --time-limit 600
+```
 ```
 
 For long runs, enable visible solver progress:

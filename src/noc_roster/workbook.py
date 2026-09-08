@@ -54,9 +54,8 @@ def write_workbook(
     validation: ValidationReport,
     solve_result: SolveResult,
     output_path: str,
+    dates: List[date],
 ) -> None:
-    dates = all_dates()
-
     by_day = {
         d: {e: assignments[(d, e)] for e in EMPLOYEES}
         for d in dates
@@ -132,6 +131,8 @@ def write_workbook(
         # 24.4 Public Holiday Report
         holiday_rows = []
         for d, name in PUBLIC_HOLIDAYS.items():
+            if d not in by_day:
+                continue
             day_assign = by_day[d]
             holiday_rows.append(
                 {

@@ -69,8 +69,11 @@ def _pairs_for_day_shift(day_assignments: Dict[str, str], shift: str) -> Tuple[s
     return "", ""
 
 
-def validate_roster(assignments: Dict[Tuple[date, str], str]) -> ValidationReport:
-    dates = all_dates()
+def validate_roster(
+    assignments: Dict[Tuple[date, str], str],
+    dates: List[date] | None = None,
+) -> ValidationReport:
+    dates = dates if dates is not None else all_dates()
     by_day: Dict[date, Dict[str, str]] = {d: {} for d in dates}
     for (d, e), s in assignments.items():
         by_day[d][e] = s

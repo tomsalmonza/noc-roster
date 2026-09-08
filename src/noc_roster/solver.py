@@ -91,7 +91,7 @@ class _ProgressSolutionLogger(cp_model.CpSolverSolutionCallback):
                         assignments[(day, e)] = s
                         break
 
-        report = validate_roster(assignments)
+        report = validate_roster(assignments, self._dates)
         self.last_fairness_index = report.fairness_index
         self.last_fairness_rating = report.fairness_rating
         self.last_rqs = report.rqs
@@ -185,7 +185,7 @@ def _all_true(model: cp_model.CpModel, vars_: List[cp_model.IntVar], name: str) 
     return z
 
 
-def solve_roster(settings: SolverSettings | None = None) -> SolveResult:
+def solve_roster(settings: SolverSettings | None = None, start_date: date | None = None) -> SolveResult:
     settings = settings or SolverSettings()
 
     def log(msg: str) -> None:
@@ -193,7 +193,7 @@ def solve_roster(settings: SolverSettings | None = None) -> SolveResult:
             print(msg, flush=True)
 
     log("[build] Initializing model...")
-    dates = all_dates()
+    dates = all_dates(start_date) if start_date is not None else all_dates()
     num_days = len(dates)
     model = cp_model.CpModel()
 
@@ -380,30 +380,38 @@ def solve_roster(settings: SolverSettings | None = None) -> SolveResult:
     penalty_terms.append(("premium_holiday_above_two", sum(premium_excess_terms), 6000))
 
     # Premium holiday preference pairings.
-    idx_christmas = dates.index(date(2026, 12, 25))
-    idx_goodwill = dates.index(date(2026, 12, 26))
-    idx_newyear = dates.index(date(2027, 1, 1))
-
     premium_overlap_penalties = []
     for e in EMPLOYEES:
-        christmas_any = model.NewBoolVar(f"xmas_any_{e}")
-        model.Add(christmas_any == sum(x[(e, idx_christmas, s)] for s in OPERATIONAL))
-
-        goodwill_any = model.NewBoolVar(f"goodwill_any_{e}")
-        model.Add(goodwill_any == sum(x[(e, idx_goodwill, s)] for s in OPERATIONAL))
-
-        newyear_any = model.NewBoolVar(f"newyear_any_{e}")
-        model.Add(newyear_any == sum(x[(e, idx_newyear, s)] for s in OPERATIONAL))
-
-        xmas_newyear = _and2(model, christmas_any, newyear_any, f"xmas_newyear_{e}")
-        xmas_goodwill = _and2(model, christmas_any, goodwill_any, f"xmas_goodwill_{e}")
-        xmas_night_newyear_night = _and2(
-            model,
-            x[(e, idx_christmas, "N")],
-            x[(e, idx_newyear, "N")],
-            f"xmasnight_newyearnight_{e}",
-        )
-        premium_overlap_penalties.extend([xmas_newyear, xmas_goodwill, xmas_night_newyear_night])
+        premium_indices_by_name = {
+            "christmas": [idx for idx, day in enumerate(dates) if PUBLIC_HOLIDAYS.get(day) == "Christmas Day"],
+            "goodwill": [idx for idx, day in enumerate(dates) if "Day of Goodwill" in PUBLIC_HOLIDAYS.get(day, "")],
+            "newyear": [idx for idx, day in enumerate(dates) if PUBLIC_HOLIDAYS.get(day) == "New Year's Day"],
+        }
+        christmas_indices = premium_indices_by_name["christmas"]
+        goodwill_indices = premium_indices_by_name["goodwill"]
+        newyear_indices = premium_indices_by_name["newyear"]
+        if christmas_indices and goodwill_indices and newyear_indices:
+            idx_christmas = christmas_indices[0]
+            idx_goodwill = goodwill_indices[0]
+            idx_newyear = newyear_indices[0]
+            christmas_any = model.NewBoolVar(f"xmas_any_{e}")
+            model.Add(christmas_any == sum(x[(e, idx_christmas, s)] for s in OPERATIONAL))
+            goodwill_any = model.NewBoolVar(f"goodwill_any_{e}")
+            model.Add(goodwill_any == sum(x[(e, idx_goodwill, s)] for s in OPERATIONAL))
+            newyear_any = model.NewBoolVar(f"newyear_any_{e}")
+            model.Add(newyear_any == sum(x[(e, idx_newyear, s)] for s in OPERATIONAL))
+            premium_overlap_penalties.extend(
+                [
+                    _and2(model, christmas_any, newyear_any, f"xmas_newyear_{e}"),
+                    _and2(model, christmas_any, goodwill_any, f"xmas_goodwill_{e}"),
+                    _and2(
+                        model,
+                        x[(e, idx_christmas, "N")],
+                        x[(e, idx_newyear, "N")],
+                        f"xmasnight_newyearnight_{e}",
+                    ),
+                ]
+            )
 
     penalty_terms.append(("premium_overlap_preferences", sum(premium_overlap_penalties), 2500))
 
@@ -612,6 +620,20 @@ def solve_roster(settings: SolverSettings | None = None) -> SolveResult:
     if settings.stop_on_first_feasible:
         model.ClearObjective()
     else:
+        # CP-SAT can spend a long time proving an objective incumbent exists on
+        # this large model. Find a feasible roster first and use it as a hint.
+        model.ClearObjective()
+        warmup_solver = cp_model.CpSolver()
+        warmup_solver.parameters.max_time_in_seconds = min(
+            30, max(5, settings.time_limit_seconds * 0.1)
+        )
+        warmup_solver.parameters.random_seed = settings.random_seed
+        warmup_solver.parameters.num_search_workers = settings.num_search_workers
+        warmup_solver.parameters.stop_after_first_solution = True
+        warmup_status = warmup_solver.Solve(model)
+        if warmup_status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            for variable in x.values():
+                model.AddHint(variable, warmup_solver.Value(variable))
         model.Minimize(sum(objective))
 
     solver = cp_model.CpSolver()
